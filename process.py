@@ -3,6 +3,7 @@
 import csv
 import numpy as np
 import pandas as pd
+import re
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
@@ -19,13 +20,35 @@ class Person:
     self.block = int(line[7])
     self.start = line[8]
     
+  def to_time(self, s):
+    fmts = '(([12]):)?(\d{2}):(\d{2})(\.(\d))?'
+    m = re.match(fmts, s)
+    secs = 0
+    if m is not None:
+      hours = m.group(2)
+      mins = int(m.group(3))
+      
+      secs = int(m.group(4))
+      decsecs = m.group(5)
+      if hours:
+        secs += int(m.group(2)) * 3600
+      secs += mins * 60
+      
+    mins = secs / 60
+    
+    return mins
+    
   def set_result(self, line):
     id = line[0]
     assert(id == self.id)
     name = line[1]
-    assert(name == self.name)
-    self.result = line[2]
-    self.time = line[3]
+    if name != self.name:
+      print('{} {} {}'.format(self.id, name, self.name))
+    # assert(name == self.name)
+    yob = line[2]
+    assert(yob == self.yob)
+    self.result = line[3]
+    self.time = self.to_time(line[4])
 
 class Category:
   def __init__(self, name):
@@ -70,8 +93,55 @@ def plot_composition():
   ax.set_ylabel('People Count')
   fig.legend()
   fig.savefig('inscriptions_by_block.pdf', bbox_inches = 'tight')
-  
 
+# Assuming x is not at either extreme of x_arr
+def find_height_at_x(x_arr, y_arr, x):
+  prev = 0
+  
+  assert(len(x_arr) == len(y_arr))
+  for idx in range(1, len(x_arr)):
+    if x > x_arr[idx - 1] and (x < x_arr[idx]):
+      return (y_arr[idx - 1] * (x_arr[idx] - x) + y_arr[idx] * (x - x_arr[idx - 1])) / (x_arr[idx] - x_arr[idx - 1])
+  
+    
+def plot_results_by_block():
+  global persons
+  global blocks
+  
+  times_per_block = {block: [] for block in blocks}
+  for person in persons:
+    if hasattr(person, 'result') and person.result == 'Arrivée':
+      times_per_block[person.block].append(person.time)
+      
+  fig, ax = plt.subplots()
+  bins = list(range(30, 100, 2)) # in minutes
+  bin_centers = [(x + y) / 2 for x, y in zip(bins[:-1], bins[1:])]
+  idx = 0
+  for block, times in times_per_block.items():
+    # Plot histogram of finisher timings, but as a line plot
+    n_np, _ = np.histogram(times, bins)
+    ax.plot(bin_centers, n_np, color = plt.cm.tab20(idx), label = block)
+    
+    # Plot median, and maybe quartiles
+    quartiles = np.quantile(times, [0.25, 0.5, 0.75])
+    quartile_heights = [find_height_at_x(bin_centers, n_np, x) for x in quartiles]
+    ax.vlines(x = quartiles[1], ymin = 0, ymax = quartile_heights[1], colors = plt.cm.tab20(idx), linestyles = 'dotted', lw = 1)
+    
+    idx += 1
+    # break
+    
+  ax.set_xlabel('Finish time (finishers only) in minutes')
+  ax.set_ylabel('People count')
+  ax.set_xticks(range(min(bins), max(bins), 10))
+  ax.set_xticks(range(min(bins), max(bins), 2), minor=True)
+  ax.grid(visible = True, which = 'minor', axis = 'x', alpha = 0.2)
+  ax.grid(visible = True, which = 'major', axis = 'x', alpha = 0.5)
+  bottom, top = ax.get_ylim()
+  ax.set_ylim(0, top)
+  fig.legend()
+  fig.savefig('results_by_block.pdf', bbox_inches = 'tight')
+
+  
 def input_data():
   global persons
   global categories
@@ -100,15 +170,20 @@ def input_data():
   # Input results
   with open('results.csv') as csvfd:
     csvr = csv.reader(csvfd)
+    lines = [line for line in csvr]
 
     # Debug check for input validity
-    for line in csvr:
+    for line in lines:
       if(len(line) != 5):
         print('DEBUG: Error in line {}'.format(line))
         
-    for line in csvr:
+    for line in lines:
       id = line[0]
-      person_by_id[id].set_result(line)
+      try:
+        person_by_id[id].set_result(line)
+      except KeyError:
+        print('{} missing'.format(id))
+        
   
   # Group participants into categories
   category_names = list(set([person.category for person in persons]))
@@ -122,6 +197,7 @@ def input_data():
 def main():
   input_data()
   plot_composition()
+  plot_results_by_block()
 
 if __name__ == '__main__':
   main()
