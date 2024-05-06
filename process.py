@@ -19,7 +19,7 @@ class Person:
     self.name = line[1]
     self.yob = line[2]
     self.gender = line[3]
-    self.country = line[4]
+    self.country = line[4][0:2]
     self.city = line[5]
     self.category = line[6]
     self.block = int(line[7])
@@ -69,12 +69,24 @@ class Category:
       self.block_n[person.block] += 1
     else:
       self.block_n[person.block] = 1
+      
+class Country:
+  def __init__(self, name, ID):
+    self.name = name
+    self.id = id
+    self.persons = []
+    
+  def add_person(self, person):
+    self.persons.append(person)
 
 person_by_id = {}
 persons = []
 categories = {}
 category_names = []
 blocks = []
+country_ids = []
+countries = {}
+country_name_by_id = {}
 
 def plot_composition():
   global persons
@@ -146,13 +158,22 @@ def plot_results_by_block():
   fig.legend()
   fig.savefig(gendir + '/results_by_block.pdf', bbox_inches = 'tight')
 
+def plot_results_by_country():
   
+  c_times = {c_id: [person.time for person in countries[c_id].persons if hasattr(person, 'result')] for c_id in country_ids}
+  stats = {c_id: (len(ptimes), sum(ptimes)/len(ptimes), np.quantile(ptimes, 0.5)) for c_id, ptimes in c_times.items() if len(ptimes) > 0}
+  print('{:80}\t{:10}\t{:10}\t{:10}'.format('Country name', 'Count', 'Mean', 'Median'))
+  [print('{:80}\t{:10}\t{:10}\t{:10}'.format(country_name_by_id[c_id], c_stats[0], round(c_stats[1], 2), round(c_stats[2], 2))) for c_id, c_stats in sorted(stats.items(), key = lambda item: item[1][2])]
+
 def input_data():
   global persons
   global categories
   global person_by_id
   global category_names
   global blocks
+  global country_ids
+  global countries
+  global country_name_by_id
   
   # Input all attendees
   with open(datadir + '/inscriptions.csv') as csvfd:
@@ -199,7 +220,25 @@ def input_data():
   categories = {category_name: Category(category_name) for category_name in category_names}
   [categories[person.category].add_person(person) for person in persons]
   
-
+  # Group participants into countries
+  country_ids = []
+  countries_by_id = {}
+  with open('countries.tsv') as csvfd:
+    csvr = csv.reader(csvfd, delimiter = '\t')
+    lines = [line for line in csvr]
+    
+    #  Debug chcek for input validity
+    for line in lines:
+      if(len(line) != 2):
+        print('DEBUG: Error in line {}'.format(line))
+    
+    for line in lines:
+      country_ids.append(line[1])
+      countries[line[1]] = Country(line[0], line[1])
+      country_name_by_id[line[1]] = line[0]
+      
+  [countries[person.country].add_person(person) for person in persons]
+      
 def main():
   input_data()
   
@@ -207,6 +246,7 @@ def main():
     os.mkdir(gendir)
   plot_composition()
   plot_results_by_block()
+  plot_results_by_country()
 
 if __name__ == '__main__':
   main()
