@@ -2,10 +2,15 @@
 
 import csv
 import numpy as np
+import os
 import pandas as pd
 import re
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+
+## Config vars
+datadir = 'data'
+gendir  = 'gen'
 
 class Person:
   
@@ -92,7 +97,7 @@ def plot_composition():
   ax.set_xlabel('Starting Block (proxy for indicated completion time)')
   ax.set_ylabel('People Count')
   fig.legend()
-  fig.savefig('inscriptions_by_block.pdf', bbox_inches = 'tight')
+  fig.savefig(gendir + '/inscriptions_by_block.pdf', bbox_inches = 'tight')
 
 # Assuming x is not at either extreme of x_arr
 def find_height_at_x(x_arr, y_arr, x):
@@ -139,7 +144,7 @@ def plot_results_by_block():
   bottom, top = ax.get_ylim()
   ax.set_ylim(0, top)
   fig.legend()
-  fig.savefig('results_by_block.pdf', bbox_inches = 'tight')
+  fig.savefig(gendir + '/results_by_block.pdf', bbox_inches = 'tight')
 
   
 def input_data():
@@ -150,7 +155,7 @@ def input_data():
   global blocks
   
   # Input all attendees
-  with open('inscriptions.csv') as csvfd:
+  with open(datadir + '/inscriptions.csv') as csvfd:
     csvr = csv.reader(csvfd)
     lines = [line for line in csvr]
 
@@ -168,7 +173,7 @@ def input_data():
     person_by_id[person.id] = person
     
   # Input results
-  with open('results.csv') as csvfd:
+  with open(datadir + '/results.csv') as csvfd:
     csvr = csv.reader(csvfd)
     lines = [line for line in csvr]
 
@@ -194,8 +199,12 @@ def input_data():
   categories = {category_name: Category(category_name) for category_name in category_names}
   [categories[person.category].add_person(person) for person in persons]
   
+
 def main():
   input_data()
+  
+  if not os.path.isdir(gendir):
+    os.mkdir(gendir)
   plot_composition()
   plot_results_by_block()
 
